@@ -9,6 +9,7 @@ import UIKit
 class GameBoardViewController: UIViewController, LabelProviding {
     private let drawingView = DrawingView()
     
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         addLabel(text: "Game Board", color: .systemRed)
@@ -17,6 +18,9 @@ class GameBoardViewController: UIViewController, LabelProviding {
     }
     
     private func setupDrawingView() {
+            drawingView.backgroundColor = .clear
+            drawingView.isOpaque = false
+            
             drawingView.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(drawingView)
             
