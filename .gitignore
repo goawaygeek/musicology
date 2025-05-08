@@ -1,0 +1,21 @@
+# Xcode specific
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.xcdebugger
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+
+# User-specific Xcode data
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Derived data & build artifacts
+DerivedData/
+build/
+
+# Swift Package Manager
+.build/
+Packages/
+
