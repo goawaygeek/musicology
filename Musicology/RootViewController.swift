@@ -26,6 +26,7 @@ class RootViewController: UIViewController {
     
     private lazy var outputVC: OutputViewController = {
         let vc = OutputViewController()
+        vc.delegate = gameBoardVC
         return vc
     }()
     

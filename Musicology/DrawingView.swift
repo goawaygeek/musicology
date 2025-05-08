@@ -12,7 +12,7 @@ class DrawingView: UIView {
     private var paths = [UIBezierPath]()
     
     // Shape recognizer with timer functionality
-    private let shapeRecognizer = ShapeRecognizer()
+    let shapeRecognizer = ShapeRecognizer()
     
     // Configure drawing appearance
     var strokeColor: UIColor = .label {
@@ -36,29 +36,29 @@ class DrawingView: UIView {
         self.backgroundColor = .clear
         self.contentMode = .redraw
         
-        // Set up the shape recognizer callback
-        shapeRecognizer.onShapeRecognized = { [weak self] itemType in
-            guard let self = self else { return }
-            
-            if let itemType = itemType {
-                // Calculate the union of all paths' bounds to show feedback
-                var combinedBounds = CGRect.zero
-                for path in self.paths {
-                    if combinedBounds.isNull {
-                        combinedBounds = path.bounds
-                    } else {
-                        combinedBounds = combinedBounds.union(path.bounds)
-                    }
-                }
-                
-                // Show recognition feedback
-                self.showRecognitionFeedback(type: itemType, for: combinedBounds)
-            }
-            
-            // Clear the paths after recognition attempt (whether successful or not)
-            self.paths.removeAll()
-            self.setNeedsDisplay()
-        }
+        // Set up the shape recognizer callback -> we're calling the closure in GBVC now so this isn't necessary.
+//        shapeRecognizer.onShapeRecognized = { [weak self] itemType in
+//            guard let self = self else { return }
+//            
+//            if let itemType = itemType {
+//                // Calculate the union of all paths' bounds to show feedback
+//                var combinedBounds = CGRect.zero
+//                for path in self.paths {
+//                    if combinedBounds.isNull {
+//                        combinedBounds = path.bounds
+//                    } else {
+//                        combinedBounds = combinedBounds.union(path.bounds)
+//                    }
+//                }
+//                
+//                // Show recognition feedback
+//                self.showRecognitionFeedback(type: itemType, for: combinedBounds)
+//            }
+//            
+//            // Clear the paths after recognition attempt (whether successful or not)
+//            self.paths.removeAll()
+//            self.setNeedsDisplay()
+//        }
     }
     
     override func draw(_ rect: CGRect) {

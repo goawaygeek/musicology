@@ -7,18 +7,9 @@
 
 import UIKit
 
-enum ItemType: String {
-    case emitter    // +
-    case spring     // s
-    case blackhole  // o
-    case splitter   // triangle
-    case drum       // U
-    case cymbal     // =
-    case note       // -
-}
-
 // Class to manage multiple paths for recognition with timer
 class ShapeRecognizer {
+    
     private var recentPaths: [UIBezierPath] = []
     private let maxPathsToStore = 3  // Store recent paths for multi-stroke recognition
     private var recognitionTimer: Timer?
