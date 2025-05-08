@@ -17,20 +17,79 @@ enum ItemType: String {
     case note       // -
 }
 
-// Class to manage multiple paths for recognition
+// Class to manage multiple paths for recognition with timer
 class ShapeRecognizer {
     private var recentPaths: [UIBezierPath] = []
     private let maxPathsToStore = 3  // Store recent paths for multi-stroke recognition
+    private var recognitionTimer: Timer?
+    private let recognitionDelay: TimeInterval = 1.0 // 1 second delay
     
+    // Closure to be called when a shape is recognized, can accept nil if NO shape is recognised.
+    var onShapeRecognized: ((ItemType?) -> Void)?
+    
+    // Call this when a new path/stroke is started
+    func beginPath() {
+        // Cancel any pending recognition when a new stroke starts
+        cancelRecognitionTimer()
+    }
+    
+    // Call this when a path/stroke is completed
     func addPath(_ path: UIBezierPath) {
         recentPaths.append(path)
         if recentPaths.count > maxPathsToStore {
             recentPaths.removeFirst()
         }
+        
+        // Start the recognition timer
+        startRecognitionTimer()
+    }
+    
+    private func startRecognitionTimer() {
+        // Cancel any existing timer first
+        cancelRecognitionTimer()
+        
+        // Create a new timer
+        recognitionTimer = Timer.scheduledTimer(
+            timeInterval: recognitionDelay,
+            target: self,
+            selector: #selector(recognitionTimerFired),
+            userInfo: nil,
+            repeats: false
+        )
+    }
+    
+    private func cancelRecognitionTimer() {
+        recognitionTimer?.invalidate()
+        recognitionTimer = nil
+    }
+    
+    @objc private func recognitionTimerFired() {
+        // Timer expired, attempt recognition
+        let recognizedType = recognizeShape()
+        
+        // Call the closure with the recognized shape
+        onShapeRecognized?(recognizedType)
+    
+        // Clear paths after recognition (whether successful or not)
+        clearPaths()
     }
     
     func recognizeShape() -> ItemType? {
         // First try single-path recognition
+        print("recognising shape!")
+        if recentPaths.count >= 2 {
+            // Try to recognize a plus sign from the last two paths
+            // FIXME: = sign will also have two paths.
+            print("multiple paths!")
+            
+            if isPlusSign(paths: Array(recentPaths.suffix(2))) {
+                return .emitter
+            }
+            if isEqualsSign(paths: Array(recentPaths.suffix(2))) {
+                return .cymbal
+            }
+        }
+        
         for path in recentPaths {
             let recognizer = RecognizablePath(path: path)
             if let type = recognizer.recognizedType {
@@ -39,13 +98,6 @@ class ShapeRecognizer {
         }
         
         // Then try multi-path recognition
-        if recentPaths.count >= 2 {
-            // Try to recognize a plus sign from the last two paths
-            if isPlusSign(paths: Array(recentPaths.suffix(2))) {
-                return .emitter
-            }
-        }
-        
         return nil
     }
     
@@ -80,6 +132,59 @@ class ShapeRecognizer {
         let centersClose = distance(center1, center2) < max(bounds1.width, bounds1.height, bounds2.width, bounds2.height) * 0.5
         
         return isPerpendicularPaths && centersClose
+    }
+    
+    // Check if two paths form an equals sign (=)
+    private func isEqualsSign(paths: [UIBezierPath]) -> Bool {
+        guard paths.count >= 2 else { return false }
+        
+        // Extract path elements for analysis
+        let elements1 = paths[0].cgPath.getPathElements()
+        let elements2 = paths[1].cgPath.getPathElements()
+        
+        // Basic length checks
+        guard elements1.count > 3, elements2.count > 3 else { return false }
+        
+        // Calculate bounding boxes
+        let bounds1 = paths[0].bounds
+        let bounds2 = paths[1].bounds
+        
+        // Both lines should be primarily horizontal
+        let isHorizontal1 = bounds1.width > bounds1.height * 1.5
+        let isHorizontal2 = bounds2.width > bounds2.height * 1.5
+        guard isHorizontal1 && isHorizontal2 else { return false }
+        
+        // Analyze the orientation of each path
+        let orientation1 = getPathOrientation(elements: elements1)
+        let orientation2 = getPathOrientation(elements: elements2)
+        print("path orientation: \(orientation1), \(orientation2)")
+        
+        // For equals sign, paths should be roughly parallel
+        let isParallelPaths = isApproximatelyParallel(orientation1, orientation2)
+        
+        // They should be vertically stacked with some gap
+//        let verticalSeparation = abs(bounds1.midY - bounds2.midY)
+//        let averageHeight = (bounds1.height + bounds2.height) / 2
+//        let isCorrectlySpaced = verticalSeparation > averageHeight * 0.5 && verticalSeparation < averageHeight * 3
+        let isCorrectlySpaced = true
+        
+        // They should be roughly the same length and roughly aligned horizontally
+        let widthRatio = max(bounds1.width, bounds2.width) / min(bounds1.width, bounds2.width)
+        let isHorizontallyAligned = abs(bounds1.midX - bounds2.midX) < max(bounds1.width, bounds2.width) * 0.3
+        let isSimilarLength = widthRatio < 1.5
+        
+        print("parallel: \(isParallelPaths), spaced: \(isCorrectlySpaced), aligned: \(isHorizontallyAligned), length: \(isSimilarLength)")
+        
+        return isParallelPaths && isCorrectlySpaced && isHorizontallyAligned && isSimilarLength
+    }
+    
+    // Check if two orientations are approximately parallel
+    private func isApproximatelyParallel(_ angle1: CGFloat, _ angle2: CGFloat) -> Bool {
+        let angleDiff = abs(normalizeAngle(angle1 - angle2))
+        let parallelAngleDiff: CGFloat = 0  // 0 degrees or 180 degrees (pi)
+        let tolerance: CGFloat = .pi / 6  // 30 degrees tolerance
+        
+        return angleDiff < tolerance || abs(angleDiff - .pi) < tolerance
     }
     
     // Calculate dominant orientation (horizontal vs vertical)
@@ -129,6 +234,12 @@ class ShapeRecognizer {
     func clearPaths() {
         recentPaths.removeAll()
     }
+    
+    // Call this when the view is about to disappear or when cleaning up
+    func cleanup() {
+        cancelRecognitionTimer()
+        clearPaths()
+    }
 }
 
 // Original single path recognition logic
@@ -137,6 +248,8 @@ struct RecognizablePath {
     var recognizedType: ItemType? {
         if recognizePlusSign() {
             return .emitter
+        } else if recognizeDrum() {
+            return .drum
         } else if recognizeCircle() {
             return .blackhole
         } else if recognizeTriangle() {
@@ -145,8 +258,6 @@ struct RecognizablePath {
             return .note
         } else if recognizeSpring() {
             return .spring
-        } else if recognizeDrum() {
-            return .drum
         } else if recognizeCymbal() {
             return .cymbal
         }
@@ -155,15 +266,19 @@ struct RecognizablePath {
     
     // Original plus sign recognition (kept for single-stroke attempts)
     private func recognizePlusSign() -> Bool {
-        let elements = path.cgPath.getPathElements()
-        guard elements.count > 10 else { return false } // Too short to be a +
+//        let elements = path.cgPath.getPathElements()
+//        guard elements.count > 10 else { return false } // Too short to be a +
+//        
+//        let directionAnalysis = analyzeDirections(elements: elements)
+//        return hasCrossPattern(directions: directionAnalysis)
         
-        let directionAnalysis = analyzeDirections(elements: elements)
-        return hasCrossPattern(directions: directionAnalysis)
+        // we're returning false here for now as the analysis on the two stroke version works well
+        return false
     }
     
     // MARK: - Spring Recognition ('S' shape)
     private func recognizeSpring() -> Bool {
+        // FIXME: this doesn't work at all as it currently is
         let elements = path.cgPath.getPathElements()
         guard elements.count > 10 else { return false } // Too short for an S
         
@@ -187,6 +302,7 @@ struct RecognizablePath {
     
     // MARK: - Drum Recognition ('U' shape)
     private func recognizeDrum() -> Bool {
+        // FIXME: this doesn't seem to work at all either.
         let elements = path.cgPath.getPathElements()
         guard elements.count > 5 else { return false }
         
@@ -301,9 +417,10 @@ struct RecognizablePath {
         // The ratio of actual length to expected circle perimeter should be close to 1
         let perimeterRatio = pathLength / approximatePerimeter
         
-        // Check if the path closes on itself
-        let elements = path.cgPath.getPathElements()
-        let isClosed = distance(elements.first!.point, elements.last!.point) < min(width, height) * 0.25
+        // FIXME: Check if the path closes on itself
+        // let elements = path.cgPath.getPathElements()
+        // let isClosed = distance(elements.first!.point, elements.last!.point) < min(width, height) * 0.25
+        let isClosed = true
         
         return perimeterRatio > 0.7 && perimeterRatio < 1.3 && isClosed
     }
