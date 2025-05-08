@@ -3,6 +3,7 @@
 *.xcscmblueprint
 *.xccheckout
 *.xcdebugger
+*.xcodeproj
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/
