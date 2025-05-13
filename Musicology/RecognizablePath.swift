@@ -18,6 +18,20 @@ class ShapeRecognizer {
     // Closure to be called when a shape is recognized, can accept nil if NO shape is recognised.
     var onShapeRecognized: ((ItemType?) -> Void)?
     
+    private var classificationResult: String = "Draw something..."
+    private var classificationConfidence: Float = 0
+    
+    private var classifier: DrawingClassifier?
+    
+    private func initializeClassifier() {
+            do {
+                classifier = try DrawingClassifier()
+            } catch {
+                print("Failed to initialize classifier: \(error)")
+                classificationResult = "Error: Couldn't load model"
+            }
+        }
+    
     // Call this when a new path/stroke is started
     func beginPath() {
         // Cancel any pending recognition when a new stroke starts
