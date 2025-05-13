@@ -23,14 +23,15 @@ class ShapeRecognizer {
     
     private var classifier: DrawingClassifier?
     
-    private func initializeClassifier() {
-            do {
-                classifier = try DrawingClassifier()
-            } catch {
-                print("Failed to initialize classifier: \(error)")
-                classificationResult = "Error: Couldn't load model"
-            }
+    init() {
+        print("initiliazing ShapeRecognizer")
+        do {
+            classifier = try DrawingClassifier()
+        } catch {
+            print("Failed to initialize classifier: \(error)")
+            classificationResult = "Error: Couldn't load model"
         }
+    }
     
     // Call this when a new path/stroke is started
     func beginPath() {
@@ -69,171 +70,226 @@ class ShapeRecognizer {
     }
     
     @objc private func recognitionTimerFired() {
+        // TODO: this can be fixed up a lot to account for errors
+        Task {
+                    let recognizedType = await classifyCurrentDrawing()
+                    await MainActor.run {
+                        print("shape recognised")
+                        onShapeRecognized?(recognizedType)
+                        // Notify listeners if needed
+                        //self.notifyRecognitionUpdated()
+                    }
+                }
+        
         // Timer expired, attempt recognition
-        let recognizedType = recognizeShape()
+        //let recognizedType = recognizeShape()
         
         // Call the closure with the recognized shape
-        onShapeRecognized?(recognizedType)
+        //onShapeRecognized?(recognizedType)
     
         // Clear paths after recognition (whether successful or not)
-        clearPaths()
+        // clearPaths()
     }
     
-    func recognizeShape() -> ItemType? {
-        // First try single-path recognition
-        print("recognising shape!")
-        if recentPaths.count >= 2 {
-            // Try to recognize a plus sign from the last two paths
-            // FIXME: = sign will also have two paths.
-            print("multiple paths!")
+    
+    private func classifyCurrentDrawing() async -> ItemType? {
+            guard !recentPaths.isEmpty, let classifier = classifier else {
+                print("returning nil \(recentPaths)")
+                return nil
+            }
             
-            if isPlusSign(paths: Array(recentPaths.suffix(2))) {
-                return .emitter
+            do {
+                let results = try await classifier.classifyDrawingWithMultipleResults(recentPaths, maxResults: 3)
+                
+                guard let topResult = results.first else {
+                    return nil
+                }
+                
+                print("result: \(topResult.label) confidence: \(topResult.confidencePercentage)")
+                
+                if (topResult.confidencePercentage > 90) {
+                    switch topResult.label {
+                    case "circle":
+                        return .blackhole
+                    case "emitter":
+                        return .emitter
+                    case "triangle":
+                        return .splitter
+                    case "delay":
+                        return .spring
+                    case "note":
+                        return .note
+                    case "drum":
+                        return .drum
+                    case "cymbal":
+                        return .cymbal
+                    default:
+                        return nil
+                    }
+                }
+            } catch {
+                print("Classification failed")
+                print("Error classifying drawing: \(error)")
             }
-            if isEqualsSign(paths: Array(recentPaths.suffix(2))) {
-                return .cymbal
-            }
+            
+            return nil
         }
-        
-        for path in recentPaths {
-            let recognizer = RecognizablePath(path: path)
-            if let type = recognizer.recognizedType {
-                return type
-            }
-        }
-        
-        // Then try multi-path recognition
-        return nil
-    }
     
-    // Check if two paths form a plus sign
-    private func isPlusSign(paths: [UIBezierPath]) -> Bool {
-        guard paths.count >= 2 else { return false }
-        
-        // Extract path elements for analysis
-        let elements1 = paths[0].cgPath.getPathElements()
-        let elements2 = paths[1].cgPath.getPathElements()
-        
-        // Basic length checks
-        guard elements1.count > 3, elements2.count > 3 else { return false }
-        
-        // Calculate bounding boxes
-        let bounds1 = paths[0].bounds
-        let bounds2 = paths[1].bounds
-        
-        // Check if paths intersect
-        guard bounds1.intersects(bounds2) else { return false }
-        
-        // Analyze the orientation of each path
-        let orientation1 = getPathOrientation(elements: elements1)
-        let orientation2 = getPathOrientation(elements: elements2)
-        
-        // For a plus sign, paths should be roughly perpendicular
-        let isPerpendicularPaths = isApproximatelyPerpendicular(orientation1, orientation2)
-        
-        // Check if paths cross near their centers
-        let center1 = CGPoint(x: bounds1.midX, y: bounds1.midY)
-        let center2 = CGPoint(x: bounds2.midX, y: bounds2.midY)
-        let centersClose = distance(center1, center2) < max(bounds1.width, bounds1.height, bounds2.width, bounds2.height) * 0.5
-        
-        return isPerpendicularPaths && centersClose
-    }
-    
-    // Check if two paths form an equals sign (=)
-    private func isEqualsSign(paths: [UIBezierPath]) -> Bool {
-        guard paths.count >= 2 else { return false }
-        
-        // Extract path elements for analysis
-        let elements1 = paths[0].cgPath.getPathElements()
-        let elements2 = paths[1].cgPath.getPathElements()
-        
-        // Basic length checks
-        guard elements1.count > 3, elements2.count > 3 else { return false }
-        
-        // Calculate bounding boxes
-        let bounds1 = paths[0].bounds
-        let bounds2 = paths[1].bounds
-        
-        // Both lines should be primarily horizontal
-        let isHorizontal1 = bounds1.width > bounds1.height * 1.5
-        let isHorizontal2 = bounds2.width > bounds2.height * 1.5
-        guard isHorizontal1 && isHorizontal2 else { return false }
-        
-        // Analyze the orientation of each path
-        let orientation1 = getPathOrientation(elements: elements1)
-        let orientation2 = getPathOrientation(elements: elements2)
-        print("path orientation: \(orientation1), \(orientation2)")
-        
-        // For equals sign, paths should be roughly parallel
-        let isParallelPaths = isApproximatelyParallel(orientation1, orientation2)
-        
-        // They should be vertically stacked with some gap
-//        let verticalSeparation = abs(bounds1.midY - bounds2.midY)
-//        let averageHeight = (bounds1.height + bounds2.height) / 2
-//        let isCorrectlySpaced = verticalSeparation > averageHeight * 0.5 && verticalSeparation < averageHeight * 3
-        let isCorrectlySpaced = true
-        
-        // They should be roughly the same length and roughly aligned horizontally
-        let widthRatio = max(bounds1.width, bounds2.width) / min(bounds1.width, bounds2.width)
-        let isHorizontallyAligned = abs(bounds1.midX - bounds2.midX) < max(bounds1.width, bounds2.width) * 0.3
-        let isSimilarLength = widthRatio < 1.5
-        
-        print("parallel: \(isParallelPaths), spaced: \(isCorrectlySpaced), aligned: \(isHorizontallyAligned), length: \(isSimilarLength)")
-        
-        return isParallelPaths && isCorrectlySpaced && isHorizontallyAligned && isSimilarLength
-    }
-    
-    // Check if two orientations are approximately parallel
-    private func isApproximatelyParallel(_ angle1: CGFloat, _ angle2: CGFloat) -> Bool {
-        let angleDiff = abs(normalizeAngle(angle1 - angle2))
-        let parallelAngleDiff: CGFloat = 0  // 0 degrees or 180 degrees (pi)
-        let tolerance: CGFloat = .pi / 6  // 30 degrees tolerance
-        
-        return angleDiff < tolerance || abs(angleDiff - .pi) < tolerance
-    }
-    
-    // Calculate dominant orientation (horizontal vs vertical)
-    private func getPathOrientation(elements: [CGPath.PathElement]) -> CGFloat {
-        guard elements.count > 1 else { return 0 }
-        
-        // Get first and last points to determine overall direction
-        let firstPoint = elements.first!.point
-        let lastPoint = elements.last!.point
-        
-        let dx = lastPoint.x - firstPoint.x
-        let dy = lastPoint.y - firstPoint.y
-        
-        // Return angle in radians
-        return atan2(dy, dx)
-    }
-    
-    // Check if two orientations are approximately perpendicular
-    private func isApproximatelyPerpendicular(_ angle1: CGFloat, _ angle2: CGFloat) -> Bool {
-        let angleDiff = abs(normalizeAngle(angle1 - angle2))
-        let perpendicularAngle: CGFloat = .pi / 2  // 90 degrees
-        let tolerance: CGFloat = .pi / 6  // 30 degrees tolerance
-        
-        return abs(angleDiff - perpendicularAngle) < tolerance
-    }
-    
-    // Normalize angle to [-π, π]
-    private func normalizeAngle(_ angle: CGFloat) -> CGFloat {
-        var result = angle
-        while result > .pi {
-            result -= 2 * .pi
-        }
-        while result < -.pi {
-            result += 2 * .pi
-        }
-        return result
-    }
-    
-    // Calculate distance between two points
-    private func distance(_ p1: CGPoint, _ p2: CGPoint) -> CGFloat {
-        let dx = p2.x - p1.x
-        let dy = p2.y - p1.y
-        return sqrt(dx * dx + dy * dy)
-    }
+//    func recognizeShape() -> ItemType? {
+//        // First try single-path recognition
+//        print("recognising shape!")
+//        if recentPaths.count >= 2 {
+//            // Try to recognize a plus sign from the last two paths
+//            // FIXME: = sign will also have two paths.
+//            print("multiple paths!")
+//            
+//            if isPlusSign(paths: Array(recentPaths.suffix(2))) {
+//                return .emitter
+//            }
+//            if isEqualsSign(paths: Array(recentPaths.suffix(2))) {
+//                return .cymbal
+//            }
+//        }
+//        
+//        for path in recentPaths {
+//            let recognizer = RecognizablePath(path: path)
+//            if let type = recognizer.recognizedType {
+//                return type
+//            }
+//        }
+//        
+//        // Then try multi-path recognition
+//        return nil
+//    }
+//    
+//    // Check if two paths form a plus sign
+//    private func isPlusSign(paths: [UIBezierPath]) -> Bool {
+//        guard paths.count >= 2 else { return false }
+//        
+//        // Extract path elements for analysis
+//        let elements1 = paths[0].cgPath.getPathElements()
+//        let elements2 = paths[1].cgPath.getPathElements()
+//        
+//        // Basic length checks
+//        guard elements1.count > 3, elements2.count > 3 else { return false }
+//        
+//        // Calculate bounding boxes
+//        let bounds1 = paths[0].bounds
+//        let bounds2 = paths[1].bounds
+//        
+//        // Check if paths intersect
+//        guard bounds1.intersects(bounds2) else { return false }
+//        
+//        // Analyze the orientation of each path
+//        let orientation1 = getPathOrientation(elements: elements1)
+//        let orientation2 = getPathOrientation(elements: elements2)
+//        
+//        // For a plus sign, paths should be roughly perpendicular
+//        let isPerpendicularPaths = isApproximatelyPerpendicular(orientation1, orientation2)
+//        
+//        // Check if paths cross near their centers
+//        let center1 = CGPoint(x: bounds1.midX, y: bounds1.midY)
+//        let center2 = CGPoint(x: bounds2.midX, y: bounds2.midY)
+//        let centersClose = distance(center1, center2) < max(bounds1.width, bounds1.height, bounds2.width, bounds2.height) * 0.5
+//        
+//        return isPerpendicularPaths && centersClose
+//    }
+//    
+//    // Check if two paths form an equals sign (=)
+//    private func isEqualsSign(paths: [UIBezierPath]) -> Bool {
+//        guard paths.count >= 2 else { return false }
+//        
+//        // Extract path elements for analysis
+//        let elements1 = paths[0].cgPath.getPathElements()
+//        let elements2 = paths[1].cgPath.getPathElements()
+//        
+//        // Basic length checks
+//        guard elements1.count > 3, elements2.count > 3 else { return false }
+//        
+//        // Calculate bounding boxes
+//        let bounds1 = paths[0].bounds
+//        let bounds2 = paths[1].bounds
+//        
+//        // Both lines should be primarily horizontal
+//        let isHorizontal1 = bounds1.width > bounds1.height * 1.5
+//        let isHorizontal2 = bounds2.width > bounds2.height * 1.5
+//        guard isHorizontal1 && isHorizontal2 else { return false }
+//        
+//        // Analyze the orientation of each path
+//        let orientation1 = getPathOrientation(elements: elements1)
+//        let orientation2 = getPathOrientation(elements: elements2)
+//        print("path orientation: \(orientation1), \(orientation2)")
+//        
+//        // For equals sign, paths should be roughly parallel
+//        let isParallelPaths = isApproximatelyParallel(orientation1, orientation2)
+//        
+//        // They should be vertically stacked with some gap
+////        let verticalSeparation = abs(bounds1.midY - bounds2.midY)
+////        let averageHeight = (bounds1.height + bounds2.height) / 2
+////        let isCorrectlySpaced = verticalSeparation > averageHeight * 0.5 && verticalSeparation < averageHeight * 3
+//        let isCorrectlySpaced = true
+//        
+//        // They should be roughly the same length and roughly aligned horizontally
+//        let widthRatio = max(bounds1.width, bounds2.width) / min(bounds1.width, bounds2.width)
+//        let isHorizontallyAligned = abs(bounds1.midX - bounds2.midX) < max(bounds1.width, bounds2.width) * 0.3
+//        let isSimilarLength = widthRatio < 1.5
+//        
+//        print("parallel: \(isParallelPaths), spaced: \(isCorrectlySpaced), aligned: \(isHorizontallyAligned), length: \(isSimilarLength)")
+//        
+//        return isParallelPaths && isCorrectlySpaced && isHorizontallyAligned && isSimilarLength
+//    }
+//    
+//    // Check if two orientations are approximately parallel
+//    private func isApproximatelyParallel(_ angle1: CGFloat, _ angle2: CGFloat) -> Bool {
+//        let angleDiff = abs(normalizeAngle(angle1 - angle2))
+//        let parallelAngleDiff: CGFloat = 0  // 0 degrees or 180 degrees (pi)
+//        let tolerance: CGFloat = .pi / 6  // 30 degrees tolerance
+//        
+//        return angleDiff < tolerance || abs(angleDiff - .pi) < tolerance
+//    }
+//    
+//    // Calculate dominant orientation (horizontal vs vertical)
+//    private func getPathOrientation(elements: [CGPath.PathElement]) -> CGFloat {
+//        guard elements.count > 1 else { return 0 }
+//        
+//        // Get first and last points to determine overall direction
+//        let firstPoint = elements.first!.point
+//        let lastPoint = elements.last!.point
+//        
+//        let dx = lastPoint.x - firstPoint.x
+//        let dy = lastPoint.y - firstPoint.y
+//        
+//        // Return angle in radians
+//        return atan2(dy, dx)
+//    }
+//    
+//    // Check if two orientations are approximately perpendicular
+//    private func isApproximatelyPerpendicular(_ angle1: CGFloat, _ angle2: CGFloat) -> Bool {
+//        let angleDiff = abs(normalizeAngle(angle1 - angle2))
+//        let perpendicularAngle: CGFloat = .pi / 2  // 90 degrees
+//        let tolerance: CGFloat = .pi / 6  // 30 degrees tolerance
+//        
+//        return abs(angleDiff - perpendicularAngle) < tolerance
+//    }
+//    
+//    // Normalize angle to [-π, π]
+//    private func normalizeAngle(_ angle: CGFloat) -> CGFloat {
+//        var result = angle
+//        while result > .pi {
+//            result -= 2 * .pi
+//        }
+//        while result < -.pi {
+//            result += 2 * .pi
+//        }
+//        return result
+//    }
+//    
+//    // Calculate distance between two points
+//    private func distance(_ p1: CGPoint, _ p2: CGPoint) -> CGFloat {
+//        let dx = p2.x - p1.x
+//        let dy = p2.y - p1.y
+//        return sqrt(dx * dx + dy * dy)
+//    }
     
     // Clear all stored paths
     func clearPaths() {
@@ -247,7 +303,7 @@ class ShapeRecognizer {
     }
 }
 
-// Original single path recognition logic
+// Original single path recognition logic -> this can all be deleted now we're using ML.
 struct RecognizablePath {
     let path: UIBezierPath
     var recognizedType: ItemType? {
