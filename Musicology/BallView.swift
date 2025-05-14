@@ -9,12 +9,8 @@ import UIKit
 class BallView: UIView {
     private let color: UIColor
     var velocity: CGVector = .zero
-    var lifetime: Int = 3 // Bounces before disappearing
-    var recentCollisions: [UIView: TimeInterval] = [:]
-    let collisionCooldown: TimeInterval = 0.5 // Half second cooldown
-    var lastCollidedObject: UIView? = nil
-        
-    
+    let id = UUID()
+    var lifetime = 1 // set to 0 to remove ball from view.
     
     func updatePosition() {
         center.x += velocity.dx
@@ -30,22 +26,6 @@ class BallView: UIView {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-    
-    func canCollideWith(_ object: UIView) -> Bool {
-        if lastCollidedObject === object {
-            return false
-        }
-//        if let lastCollisionTime = recentCollisions[object],
-//           currentTime - lastCollisionTime < collisionCooldown {
-//            return false
-//        }
-        return true
-    }
-    
-    func registerCollision(with object: UIView, at time: TimeInterval) {
-        // recentCollisions[object] = time
-        lastCollidedObject = object
     }
     
     override func draw(_ rect: CGRect) {

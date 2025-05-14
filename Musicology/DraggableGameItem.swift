@@ -7,6 +7,10 @@
 import UIKit
 
 class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
+    var id: UUID
+    
+    var collisionBounds: CGRect { return self.frame }
+    
     var name: String?
     var position: CGPoint {
         get { return center }
@@ -19,6 +23,8 @@ class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
     private var panGesture: UIPanGestureRecognizer!
     
     override init(type: ItemType, frame: CGRect) {
+        id = UUID()
+        //collisionBounds = frame
         super.init(type: type, frame: frame)
         setupGestures()
         self.name = type.displayName
@@ -77,21 +83,6 @@ class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
             
         default:
             break
-        }
-    }
-    
-    func handleCollision(with ball: BallView) {
-        // Handle what happens when a ball collides with this item
-        print("collision with: \(name ?? type.displayName)")
-        
-        // Add any visual feedback or game logic here
-        // For example, flash the item briefly:
-        UIView.animate(withDuration: 0.1, animations: {
-            self.alpha = 0.5
-        }) { _ in
-            UIView.animate(withDuration: 0.1) {
-                self.alpha = 1.0
-            }
         }
     }
 }
