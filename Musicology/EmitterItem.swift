@@ -8,7 +8,7 @@ import UIKit
 
 class EmitterItem: DraggableGameItem {
     // Emitter-specific properties
-    var bpm: Int = 120 {
+    var bpm: Int = 30 {
         didSet { bpm = min(max(bpm, 60), 220) } // Clamp to range
     }
     

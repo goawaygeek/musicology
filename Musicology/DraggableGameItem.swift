@@ -6,7 +6,8 @@
 //
 import UIKit
 
-class DraggableGameItem: BaseGameItemView, GameItem {
+class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
+    var name: String?
     var position: CGPoint {
         get { return center }
         set { center = newValue }
@@ -20,6 +21,7 @@ class DraggableGameItem: BaseGameItemView, GameItem {
     override init(type: ItemType, frame: CGRect) {
         super.init(type: type, frame: frame)
         setupGestures()
+        self.name = type.displayName
     }
     
     @MainActor required init?(coder: NSCoder) {
@@ -75,6 +77,21 @@ class DraggableGameItem: BaseGameItemView, GameItem {
             
         default:
             break
+        }
+    }
+    
+    func handleCollision(with ball: BallView) {
+        // Handle what happens when a ball collides with this item
+        print("collision with: \(name ?? type.displayName)")
+        
+        // Add any visual feedback or game logic here
+        // For example, flash the item briefly:
+        UIView.animate(withDuration: 0.1, animations: {
+            self.alpha = 0.5
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.alpha = 1.0
+            }
         }
     }
 }

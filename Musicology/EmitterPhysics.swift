@@ -7,7 +7,7 @@
 import UIKit
 
 struct EmitterConfiguration {
-    var bpm: Double = 120 // 60-220
+    var bpm: Double = 1 // 60-220
     var velocity: CGFloat = 0.5 // 0-1
     var isStaggered: Bool = false
 }
@@ -42,6 +42,7 @@ class EmitterPhysics {
         let interval = 60.0 / config.bpm
         
         if currentTime - lastEmitTime >= interval {
+            print("ct: \(currentTime), lt: \(lastEmitTime), diff: \(currentTime - lastEmitTime), interval: \(interval), config: \(config)")
             emitBalls()
             lastEmitTime = currentTime
         }
