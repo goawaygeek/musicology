@@ -8,6 +8,7 @@ import UIKit
 
 class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
     var id: UUID
+    weak var delegate: GameItemDelegate?
     
     var collisionBounds: CGRect { return self.frame }
     
@@ -84,5 +85,9 @@ class DraggableGameItem: BaseGameItemView, GameItem, CollisionObject {
         default:
             break
         }
+    }
+    
+    func didCollide(with ball: BallView, at point: CGPoint) {
+        delegate?.gameItemDidCollide(self)
     }
 }

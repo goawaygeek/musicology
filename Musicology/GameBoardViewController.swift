@@ -15,6 +15,7 @@ class GameBoardViewController: UIViewController, LabelProviding {
     private var collisionManager:  CollisionManager?
     private var gameUpdateTimer : CADisplayLink?
     private var isGameActive = true
+    private var soundEngine: SoundEngine?
 
     
     
@@ -25,6 +26,7 @@ class GameBoardViewController: UIViewController, LabelProviding {
         setupShapeRecognition()
         startCollisionManager()
         startGameLoop()
+        startSoundEngine()
         
     }
     
@@ -83,6 +85,10 @@ class GameBoardViewController: UIViewController, LabelProviding {
         collisionManager = CollisionManager()
     }
     
+    private func startSoundEngine() {
+        soundEngine = SoundEngine()
+    }
+    
     private func setupDrawingView() {
         drawingView.backgroundColor = .clear
         drawingView.isOpaque = false
@@ -106,7 +112,7 @@ class GameBoardViewController: UIViewController, LabelProviding {
             }
             
             // Use the center of the view for now
-            let centerPosition = self.view.center
+            // let centerPosition = self.view.center
             self.handleRecognizedItem(itemType)
             
             self.drawingView.clearCanvas()
@@ -128,6 +134,7 @@ class GameBoardViewController: UIViewController, LabelProviding {
         
         newItem.center = position
         view.addSubview(newItem)
+        newItem.delegate = self
         
         gameItems.append(newItem)
     }
@@ -236,6 +243,28 @@ extension GameBoardViewController: PlayControlDelegate {
     
     private func animateBall(_ ball: BallView, direction: CGVector) {
         ball.velocity = direction * 2.0 // Scale factor
+    }
+}
+
+extension GameBoardViewController: GameItemDelegate {
+    func gameItemDidCollide(_ item: GameItem) {
+        print("play sound now \(item.type)")
+        switch item.type {
+            case ItemType.drum:
+                soundEngine?.playSnare()
+                break
+            case ItemType.cymbal:
+                soundEngine?.playCymbal()
+                break
+            case ItemType.note:
+                soundEngine?.playNote()
+                break
+            case ItemType.blackhole:
+                soundEngine?.playKick()
+                break
+            default:
+                break
+        }
     }
 }
 
