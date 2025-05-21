@@ -5,6 +5,9 @@
 //  Created by Scott Brewer on 5/16/25.
 //
 
+// local interface to audiokit; manages sound playback in a single class.
+
+
 import AudioKit
 import Foundation
 import SoundpipeAudioKit

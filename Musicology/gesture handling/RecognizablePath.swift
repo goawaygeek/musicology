@@ -5,6 +5,8 @@
 //  Created by Scott Brewer on 5/6/25.
 //
 
+// this has been superceded by DrawingClassifier using ML recognition on gestures.
+
 import UIKit
 
 // Class to manage multiple paths for recognition with timer

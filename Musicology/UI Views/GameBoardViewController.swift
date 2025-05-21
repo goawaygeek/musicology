@@ -146,39 +146,40 @@ class GameBoardViewController: UIViewController, LabelProviding {
     }
 }
 
-extension GameBoardViewController: ShapeRecognizerDelegate {
-    func didRecognizeShape(_ type: ItemType, at position: CGPoint) {
-        // Convert position if needed
-        let convertedPosition = view.convert(position, from: drawingView)
-        
-        // Visual feedback
-        showRecognitionFeedback(for: type, at: convertedPosition)
-        
-        // Create the item after a slight delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.placeItem(type: type, at: convertedPosition)
-        }
-    }
-    
-    private func showRecognitionFeedback(for type: ItemType, at position: CGPoint) {
-        let feedbackView = UIImageView(image: UIImage(named: type.imageName))
-        feedbackView.center = position
-        feedbackView.alpha = 0
-        feedbackView.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
-        view.addSubview(feedbackView)
-        
-        UIView.animate(withDuration: 0.2, animations: {
-            feedbackView.alpha = 1
-            feedbackView.transform = .identity
-        }) { _ in
-            UIView.animate(withDuration: 0.2, delay: 0.5, options: [], animations: {
-                feedbackView.alpha = 0
-            }) { _ in
-                feedbackView.removeFromSuperview()
-            }
-        }
-    }
-}
+//extension GameBoardViewController: ShapeRecognizerDelegate {
+//    func didRecognizeShape(_ type: ItemType, at position: CGPoint) {
+//        // Convert position if needed
+//        print("recognizing shape")
+//        let convertedPosition = view.convert(position, from: drawingView)
+//        
+//        // Visual feedback
+//        showRecognitionFeedback(for: type, at: convertedPosition)
+//        
+//        // Create the item after a slight delay
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//            self.placeItem(type: type, at: convertedPosition)
+//        }
+//    }
+//    
+//    private func showRecognitionFeedback(for type: ItemType, at position: CGPoint) {
+//        let feedbackView = UIImageView(image: UIImage(named: type.imageName))
+//        feedbackView.center = position
+//        feedbackView.alpha = 0
+//        feedbackView.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
+//        view.addSubview(feedbackView)
+//        
+//        UIView.animate(withDuration: 0.2, animations: {
+//            feedbackView.alpha = 1
+//            feedbackView.transform = .identity
+//        }) { _ in
+//            UIView.animate(withDuration: 0.2, delay: 0.5, options: [], animations: {
+//                feedbackView.alpha = 0
+//            }) { _ in
+//                feedbackView.removeFromSuperview()
+//            }
+//        }
+//    }
+//}
 
 extension GameBoardViewController: PlayControlDelegate {
     func playStateChanged(isPlaying: Bool) {

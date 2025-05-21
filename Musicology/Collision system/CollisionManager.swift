@@ -4,7 +4,7 @@
 //
 //  Created by Scott Brewer on 5/14/25.
 //
-// TODO: contemplate making objects single tap or multitap somehow, the cooldown period works, but it could be better, set to 0.5 it takes 1.5 seconds for the ball to move through the rect of the object view so you end up with 3 triggers, it is kinda ugly.
+
 import UIKit
 
 class CollisionManager {
