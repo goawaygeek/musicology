@@ -16,6 +16,8 @@ class GameBoardViewController: UIViewController, LabelProviding {
     private var gameUpdateTimer : CADisplayLink?
     private var isGameActive = true
     private var soundEngine: SoundEngine?
+    weak var editPanelVC: EditPanelViewController?
+    private var emitterPhysicsMap: [ObjectIdentifier: EmitterPhysics] = [:]
 
     
     
@@ -204,10 +206,16 @@ extension GameBoardViewController: PlayControlDelegate {
             )
             
             let physics = EmitterPhysics(config: config)
+            // there may be some issue here:
+//            physics.startEmitting { [weak self, weak emitterItem] direction, pipeIndex in
+//                        guard let strongSelf = self, let strongEmitterItem = emitterItem else { return }
+//                        strongSelf.createBall(from: strongEmitterItem, direction: direction, pipeIndex: pipeIndex)
+//                    }
             physics.startEmitting { [weak self] direction, pipeIndex in
                 self?.createBall(from: emitter, direction: direction, pipeIndex: pipeIndex)
             }
             activeEmitters.append(physics)
+            emitterPhysicsMap[ObjectIdentifier(emitter)] = physics
         }
     }
     
@@ -215,6 +223,7 @@ extension GameBoardViewController: PlayControlDelegate {
         // Stop and clear all active emitters
         activeEmitters.forEach { $0.stopEmitting() }
         activeEmitters.removeAll()
+        emitterPhysicsMap.removeAll()
     }
     
     private func createBall(from emitter: DraggableGameItem,
@@ -248,6 +257,30 @@ extension GameBoardViewController: PlayControlDelegate {
 }
 
 extension GameBoardViewController: GameItemDelegate {
+    func gameItemDidUpdate(_ item: any GameItem) {
+        if let emitterItem = item as? EmitterItem {
+            if let physicsInstance = emitterPhysicsMap[ObjectIdentifier(emitterItem)] {
+                // Get the LATEST config directly from the EmitterItem that was updated
+                guard let currentItemConfig = emitterItem.audioConfiguration as? EmitterConfiguration else {
+                     print("❌ Could not cast emitterItem.audioConfiguration to EmitterConfiguration in gameItemDidUpdate")
+                     return
+                }
+                print("✅ Updating EmitterPhysics from gameItemDidUpdate for item. BPM: \(currentItemConfig.bpm), Staggered: \(currentItemConfig.isStaggered)")
+                physicsInstance.updateConfig(currentItemConfig)
+            } else {
+                // This is normal if the game is stopped or the specific emitter isn't active.
+                 print("ℹ️ gameItemDidUpdate for EmitterItem, but no active physics instance in map. Item: \(emitterItem.type) at \(emitterItem.frame.origin)")
+            }
+        }
+            // Handle other game item types if necessary
+//        if let emitter = item as? EmitterItem,
+//           let index = gameItems.firstIndex(where: { $0 === item }),
+//           index < activeEmitters.count {
+//            
+//            activeEmitters[index].updateConfig(emitter.audioConfiguration as! EmitterConfiguration)
+//        }
+    }
+    
     func gameItemDidCollide(_ item: GameItem) {
         print("play sound now \(item.type)")
         switch item.type {
@@ -267,7 +300,76 @@ extension GameBoardViewController: GameItemDelegate {
                 break
         }
     }
+    
+    func gameItemWasSelected(_ item: GameItem) {
+        // Show edit panel with this item's configuration
+        print("showing edit panel for \(item.type)")
+        editPanelVC?.configure(for: item)
+    }
+    
+    
 }
+
+extension GameBoardViewController: EditPanelDelegate {
+    func editPanelDidRequestTestSound(_ panel: EditPanelViewController, item: any GameItem) {
+        if let draggableItem = item as? DraggableGameItem {
+            draggableItem.playTestSound()
+        }
+    }
+    
+    func editPanel(_ panel: EditPanelViewController,
+                       didUpdateConfiguration configuration: AudioConfiguration,
+                       for item: GameItem) {
+            // Update the item's configuration
+            if let draggableItem = item as? DraggableGameItem {
+                draggableItem.updateAudioConfiguration(configuration)
+            }
+            
+            // Forward to type-specific handlers
+            switch configuration {
+            case let emitterConfig as EmitterConfiguration:
+                editPanel(panel, didUpdateEmitterConfiguration: emitterConfig, for: item)
+            case let drumConfig as DrumConfiguration:
+                editPanel(panel, didUpdateDrumConfiguration: drumConfig, for: item)
+            default:
+                break
+            }
+        }
+    
+    // Emitter-specific updates
+        func editPanel(_ panel: EditPanelViewController,
+                       didUpdateEmitterConfiguration config: EmitterConfiguration,
+                       for item: GameItem) {
+            guard let emitterItem = item as? EmitterItem else {
+                print("❌ Item is not an EmitterItem in didUpdateEmitterConfiguration")
+                return
+            }
+            
+            if let physicsInstance = emitterPhysicsMap[ObjectIdentifier(emitterItem)] {
+                print("✅ Updating EmitterPhysics for item via map. New BPM: \(config.bpm), Staggered: \(config.isStaggered)")
+                physicsInstance.updateConfig(config)
+            } else {
+                print("⚠️ Could not find active EmitterPhysics for item: \(emitterItem) in map to update config.")
+                // This might happen if the item was edited while emitters were globally stopped.
+            }
+            
+//            guard let emitterIndex = gameItems.firstIndex(where: { $0 === item }),
+//                  activeEmitters.indices.contains(emitterIndex) else { return }
+//            
+//            activeEmitters[emitterIndex].updateConfig(config)
+        }
+        
+        // Drum-specific updates
+        func editPanel(_ panel: EditPanelViewController,
+                       didUpdateDrumConfiguration config: DrumConfiguration,
+                       for item: GameItem) {
+            // Handle drum-specific live updates
+//            if let drum = item as? DrumItem {
+//                drum.applyConfiguration(config)
+//            }
+        }
+}
+
 
 // Associated objects key for storing ball reference in the CADisplayLink
 private struct AssociatedKeys {

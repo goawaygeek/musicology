@@ -30,7 +30,7 @@ class RootViewController: UIViewController {
         return vc
     }()
     
-    // MARK: - Layout Constants
+    // MARK: - Layout Constants // everything hardcoded for testing
     private enum Layout {
         static let targetHeight: CGFloat = 120
         static let outputHeight: CGFloat = 120
@@ -55,6 +55,8 @@ class RootViewController: UIViewController {
         addChildVC(gameBoardVC)
         addChildVC(editPanelVC)
         addChildVC(outputVC)
+        
+        gameBoardVC.editPanelVC = editPanelVC
     }
     
     private func addChildVC(_ child: UIViewController) {

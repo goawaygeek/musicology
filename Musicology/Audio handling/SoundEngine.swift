@@ -35,6 +35,211 @@ class SoundEngine {
     
     init() {
         setupAudioEngine()
+        setupNotificationObserver()
+    }
+    
+    private func setupNotificationObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCollisionNotification(_:)),
+            name: .itemCollisionOccurred,
+            object: nil
+        )
+    }
+    
+    @objc private func handleCollisionNotification(_ notification: Notification) {
+        guard let audioConfig = notification.userInfo?["audioConfiguration"] as? AudioConfiguration else {
+            return
+        }
+        
+        playSound(with: audioConfig)
+    }
+    
+    func playSound(with configuration: AudioConfiguration) {
+        switch configuration {
+        case let drumConfig as DrumConfiguration:
+            playDrum(with: drumConfig)
+        case let cymbalConfig as CymbalConfiguration:
+            playCymbal(with: cymbalConfig)
+        case let noteConfig as NoteConfiguration:
+            playNote(with: noteConfig)
+        case is SilentConfiguration:
+            break // Do nothing for silent items
+        default:
+            print("Unknown audio configuration type")
+        }
+    }
+    
+    private func playNote(with config: NoteConfiguration) {
+        // Convert note string to frequency
+        let frequency = noteStringToFrequency(config.note)
+        noteOscillator.frequency = AUValue(frequency)
+        
+        // Apply volume
+        noteOscillator.amplitude = AUValue(config.volume * 0.5) // Scale to reasonable range
+        
+        // Set waveform based on configuration
+        // updateOscillatorWaveform(noteOscillator, waveShape: config.waveShape)
+        
+        // Start the ADSR envelope
+        noteADSR.openGate()
+        
+        // Stop the note after configured duration
+        let durationSeconds = config.duration / 1000.0 // Convert ms to seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + durationSeconds) {
+            self.noteADSR.closeGate()
+        }
+    }
+    
+    private func playCymbal(with config: CymbalConfiguration) {
+        // Adjust filter based on cymbal type
+        switch config.cymbalType {
+        case .hiHat:
+            cymbalFilter.cutoffFrequency = 10000
+            cymbalNoise.amplitude = AUValue(config.volume * 0.2)
+        case .crash:
+            cymbalFilter.cutoffFrequency = 8000
+            cymbalNoise.amplitude = AUValue(config.volume * 0.3)
+        case .ride:
+            cymbalFilter.cutoffFrequency = 6000
+            cymbalNoise.amplitude = AUValue(config.volume * 0.25)
+        }
+        
+        // Adjust decay based on configuration
+        cymbalADSR.decayDuration = AUValue(0.1 + (config.decay * 0.4)) // 0.1 to 0.5 seconds
+        
+        cymbalADSR.openGate()
+        
+        // Auto-release after decay time
+        let releaseTime = cymbalADSR.decayDuration + 0.1
+        DispatchQueue.main.asyncAfter(deadline: .now() + TimeInterval(releaseTime)) {
+            self.cymbalADSR.closeGate()
+        }
+    }
+    
+    private func playDrum(with config: DrumConfiguration) {
+        switch config.drumType {
+        case .snare:
+            playSnare(volume: config.volume, pitch: config.pitch)
+        case .kick:
+            playKick(volume: config.volume, pitch: config.pitch)
+        case .floor:
+            playFloorTom(volume: config.volume, pitch: config.pitch)
+        case .rack:
+            playRackTom(volume: config.volume, pitch: config.pitch)
+        }
+    }
+    
+    private func playSnare(volume: Float, pitch: Float) {
+        // Adjust frequency based on pitch (-1.0 to 1.0)
+        let baseCenterFreq: AUValue = 1200
+        let pitchMultiplier = pow(2.0, pitch) // Semitone adjustment
+        snareFilter.centerFrequency = baseCenterFreq * AUValue(pitchMultiplier)
+        
+        snareNoise.amplitude = AUValue(volume * 0.4)
+        snareADSR.openGate()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            self.snareADSR.closeGate()
+        }
+    }
+    
+    private func playKick(volume: Float, pitch: Float) {
+        let baseFreq: AUValue = 60
+        let pitchMultiplier = pow(2.0, pitch)
+        let targetFreq = baseFreq * AUValue(pitchMultiplier)
+        
+        kickOscillator.amplitude = AUValue(volume * 0.8)
+        kickOscillator.frequency = targetFreq * 2 // Start higher
+        
+        kickADSR.openGate()
+        
+        // Pitch slide effect
+        let pitchSlideDuration = 0.1
+        let pitchChangeSteps = 10
+        let pitchStepTime = pitchSlideDuration / Double(pitchChangeSteps)
+        let freqDiff = targetFreq
+        
+        for i in 1...pitchChangeSteps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + (pitchStepTime * Double(i))) {
+                self.kickOscillator.frequency = (targetFreq * 2) - (freqDiff * AUValue(Double(i) / Double(pitchChangeSteps)))
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            self.kickADSR.closeGate()
+        }
+    }
+    
+    // New methods for additional drum types
+    private func playFloorTom(volume: Float, pitch: Float) {
+        // Floor tom - lower frequency than snare
+        let baseCenterFreq: AUValue = 800
+        let pitchMultiplier = pow(2.0, pitch)
+        snareFilter.centerFrequency = baseCenterFreq * AUValue(pitchMultiplier)
+        snareFilter.bandwidth = 400
+        
+        snareNoise.amplitude = AUValue(volume * 0.5)
+        snareADSR.decayDuration = 0.4 // Longer decay for tom
+        snareADSR.openGate()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.snareADSR.closeGate()
+            // Reset decay for snare
+            self.snareADSR.decayDuration = 0.2
+        }
+    }
+    
+    private func playRackTom(volume: Float, pitch: Float) {
+        // Rack tom - higher than floor tom, lower than snare
+        let baseCenterFreq: AUValue = 1000
+        let pitchMultiplier = pow(2.0, pitch)
+        snareFilter.centerFrequency = baseCenterFreq * AUValue(pitchMultiplier)
+        snareFilter.bandwidth = 500
+        
+        snareNoise.amplitude = AUValue(volume * 0.45)
+        snareADSR.decayDuration = 0.3
+        snareADSR.openGate()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.snareADSR.closeGate()
+            // Reset decay for snare
+            self.snareADSR.decayDuration = 0.2
+        }
+    }
+    
+    // Helper method to convert note strings to frequencies
+    private func noteStringToFrequency(_ noteString: String) -> Double {
+        // Simple implementation - you might want to use a more comprehensive one
+        let noteMap: [String: Double] = [
+            "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13,
+            "E4": 329.63, "F4": 349.23, "F#4": 369.99, "G4": 392.00,
+            "G#4": 415.30, "A4": 440.00, "A#4": 466.16, "B4": 493.88,
+            "C3": 130.81, "D3": 146.83, "E3": 164.81, "F3": 174.61,
+            "G3": 196.00, "A3": 220.00, "B3": 246.94,
+            "C5": 523.25, "D5": 587.33, "E5": 659.25, "F5": 698.46,
+            "G5": 783.99, "A5": 880.00, "B5": 987.77
+        ]
+        
+        return noteMap[noteString] ?? 261.63 // Default to C4
+    }
+    
+    private func updateOscillatorWaveform(_ oscillator: Oscillator, waveShape: NoteConfiguration.WaveShape) {
+        // TODO: this isn't being called for now, I would like to have the
+        // ability to change waveshapes but it is definitely a P2 not a P0
+//        let waveform: Table
+//        switch waveShape {
+//        case .sine:
+//            waveform = Table(.sine)
+//        case .square:
+//            waveform = Table(.square)
+//        case .sawtooth:
+//            waveform = Table(.sawtooth)
+//        case .triangle:
+//            waveform = Table(.triangle)
+//        }
+        
+        
     }
     
     private func setupAudioEngine() {
