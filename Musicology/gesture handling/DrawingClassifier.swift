@@ -85,7 +85,8 @@ class DrawingClassifier {
         }
     }
     
-    /// Classify a drawing and get multiple results asynchronously
+    // FIXME: this errors on simulators and should be updated to shift away from the ML model
+    // (it should probably fall back on the original non ML gesture recognition code)
     func classifyDrawingWithMultipleResults(_ paths: [UIBezierPath], maxResults: Int = 3) async throws -> [ClassificationResult] {
         return try await withCheckedThrowingContinuation { continuation in
             // First, render the paths to an image
