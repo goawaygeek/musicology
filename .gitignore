@@ -3,10 +3,6 @@
 *.xcscmblueprint
 *.xccheckout
 *.xcdebugger
-*.xcodeproj
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
 
 # User-specific Xcode data
 *.xcworkspace/xcuserdata/
